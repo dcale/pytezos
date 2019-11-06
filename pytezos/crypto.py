@@ -1,6 +1,5 @@
 import hashlib
 import pysodium
-import secp256k1
 import unicodedata
 from fastecdsa.ecdsa import sign, verify
 from fastecdsa.keys import get_public_key
@@ -18,7 +17,7 @@ def blake2b_32(v=b''):
 
 class Key(object):
     """
-    Represents a public or secret key for Tezos. Ed25519, Secp256k1 and P256
+    Represents a public or secret key for Tezos. Ed25519 and P256
     are supported.
     """
     def __init__(self, key: str, passphrase: str = None, email: str = None):
@@ -92,10 +91,6 @@ class Key(object):
                     self._public_key = pysodium.crypto_sign_sk_to_pk(sk=key)
                 else:
                     self._public_key, self._secret_key = pysodium.crypto_sign_seed_keypair(seed=key)
-            # Secp256k1
-            elif self.curve == b"sp":
-                sk = secp256k1.PrivateKey(key)
-                self._public_key = sk.pubkey.serialize()
             # P256
             elif self.curve == b"p2":
                 pk = get_public_key(bytes_to_int(self._secret_key), curve=P256)
@@ -165,11 +160,6 @@ class Key(object):
         if self.curve == b"ed":
             digest = pysodium.crypto_generichash(message)
             signature = pysodium.crypto_sign_detached(digest, self._secret_key)
-        # Secp256k1
-        elif self.curve == b"sp":
-            pk = secp256k1.PrivateKey(self._secret_key)
-            signature = pk.ecdsa_serialize_compact(
-                pk.ecdsa_sign(message, digest=blake2b_32))
         # P256
         elif self.curve == b"p2":
             r, s = sign(msg=message, d=bytes_to_int(self._secret_key), hashfunc=blake2b_32)
@@ -208,12 +198,6 @@ class Key(object):
             try:
                 pysodium.crypto_sign_verify_detached(signature, digest, self._public_key)
             except ValueError:
-                raise ValueError('Signature is invalid.')
-        # Secp256k1
-        elif self.curve == b"sp":
-            pk = secp256k1.PublicKey(self._public_key, raw=True)
-            sig = pk.ecdsa_deserialize_compact(signature)
-            if not pk.ecdsa_verify(message, sig, digest=blake2b_32):
                 raise ValueError('Signature is invalid.')
         # P256
         elif self.curve == b"p2":
